@@ -1,0 +1,38 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../crypto.hpp
+string
+-
+cmath
+-
+sstream
+-
+iomanip
+-
+istream
+-
+vector
+-
+openssl/evp.h
+-
+openssl/buffer.h
+-
+openssl/sha.h
+-
+openssl/md5.h
+-
+
+/home/minzzl/http_on_tcp_client/tests/crypto_test.cpp
+vector
+-
+cassert
+-
+crypto.hpp
+/home/minzzl/http_on_tcp_client/tests/crypto.hpp
+
