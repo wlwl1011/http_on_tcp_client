@@ -104,14 +104,14 @@ void NetworkChange(std::string fromIface, std::string toIface)
 void thread_function()
 {
 
-    this_thread::sleep_for(chrono::milliseconds(100));
+    this_thread::sleep_for(chrono::milliseconds(50));
     auto millisec_since_epoch_hanover_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     handover_delay_start_time = millisec_since_epoch_hanover_start;
 
     NetworkChange("eth0", "wlo1");
-    HttpsClient client2("155.230.34.228:8080", "wlo1");
+    HttpsClient client2("quic.server-2:8000", false);
 
-    auto r2 = client2.request("GET", "/");
+    auto r2 = client2.request("GET", "./index.html");
     handover_delay_end_time = client2.handover_delay_end_time;
     auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
@@ -120,30 +120,22 @@ void thread_function()
 
     std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
     std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+
+    // system("../network_recovery.sh");
 }
 
 int main()
 {
-    // HTTPS-server at port 8080 using 1 thread
-    // Unless you do more heavy non-threaded processing in the resources,
-    // 1 thread is usually faster than several threads
 
-    // Client examples
-    // Second Client() parameter set to false: no certificate verification
-    HttpsClient client("quic.server:8080", false);
-    auto r1 = client.request("GET", "/test");
+    HttpsClient client("quic.server-2:8000", false);
+
+    auto r1 = client.request("GET", "./index.html");
+    std::cout << r1->status_code << std::endl;
 
     thread _t1(thread_function);
     total_delay_start_time = client.total_delay_start_time; //첫 REQUEST에서 시작 재기 시작함
-    std::cout << r1->status_code << std::endl;
+    std::cout << "1번 끝" << std::endl;
     _t1.join();
-
-    // string json_string = "{\"firstName\": \"John\",\"lastName\": \"Smith\",\"age\": 25}";
-    // auto r2 = client.request("POST", "/string", json_string);
-    // cout << r2->content.rdbuf() << endl;
-
-    // auto r3 = client.request("POST", "/json", json_string);
-    // cout << r3->content.rdbuf() << endl;
 
     return 0;
 }

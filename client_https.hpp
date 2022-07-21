@@ -56,7 +56,7 @@ namespace SimpleWeb
                     query = std::unique_ptr<boost::asio::ip::tcp::resolver::query>(new boost::asio::ip::tcp::resolver::query(host, std::to_string(port)));
                 else
                 {
-                    auto proxy_host_port = parse_host_port(config.proxy_server, 8080);
+                    auto proxy_host_port = parse_host_port(config.proxy_server, 8000);
                     query = std::unique_ptr<boost::asio::ip::tcp::resolver::query>(new boost::asio::ip::tcp::resolver::query(proxy_host_port.first, std::to_string(proxy_host_port.second)));
                 }
                 resolver.async_resolve(*query, [this](const boost::system::error_code &ec, boost::asio::ip::tcp::resolver::iterator it)
@@ -79,8 +79,8 @@ namespace SimpleWeb
                                 //현재 연결 된 ip 보여줌
                                 std::cout << "Client ip is " ;
                                 std::cout <<  this->socket->lowest_layer().local_endpoint() << std::endl;
-                                // std::cout << ", and server ip is " ;
-                                // std::cout <<  this->socket->remote_endpoint() << std::endl;
+                                std::cout << ", and server ip is " ;
+                                std::cout <<  this->socket->lowest_layer().remote_endpoint() << std::endl;
                                 auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
                                 total_delay_start_time = millisec_since_epoch;
                                 handover_delay_end_time = millisec_since_epoch;
