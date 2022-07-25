@@ -1,0 +1,8 @@
+Client ip is 172.20.10.6:46200
+, and server ip is 155.230.34.235:8000
+[quic_toy_client] Network Change from eth0 to wlo1
+sudo route add -net 0.0.0.0 gw 192.168.0.1 dev wlo1 metric 51
+sudo route del -net 0.0.0.0 dev wlo1 metric 600
+sudo route add -net 0.0.0.0 gw 172.20.10.1 dev eth0 metric 600
+handover delay : 1.84467e+19 miliseconds
+total delay : 1.65839e+12 miliseconds
