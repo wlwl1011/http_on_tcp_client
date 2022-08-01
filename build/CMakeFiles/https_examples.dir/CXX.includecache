@@ -73,6 +73,24 @@ algorithm
 -
 crypto.hpp
 /home/minzzl/http_on_tcp_client/crypto.hpp
+arpa/inet.h
+-
+sys/socket.h
+-
+ifaddrs.h
+-
+thread
+-
+stdlib.h
+-
+chrono
+-
+net/route.h
+-
+sys/types.h
+-
+sys/ioctl.h
+-
 
 /home/minzzl/http_on_tcp_client/server_http.hpp
 boost/asio.hpp
