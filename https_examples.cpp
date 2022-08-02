@@ -48,9 +48,9 @@ void default_resource_send(const HttpsServer &server, const shared_ptr<HttpsServ
 
 void NetworkChange(std::string fromIface, std::string toIface)
 {
-    std::cout << "NetworkChange" << std::endl;
+    std::cout << "Sleeping..." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    std::cout << "Start" << std::endl;
+    std::cout << "NetworkChange Start" << std::endl;
 
     std::string del_order = "sudo route del -net 0.0.0.0 dev ";
     std::string add_order = "sudo route add -net 0.0.0.0 gw ";
@@ -106,12 +106,13 @@ void NetworkChange(std::string fromIface, std::string toIface)
         cout << std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str() << endl;
         system(std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str());
     }
-
+    // connection migration 시작
+    std::cout << "Second connection start" << std::endl;
     HttpsClient client2("quic.server-2:8000", false);
-    std::cout << "[quic_toy_client] Detected network change and Start connection migration from " << fromIface << " to " << toIface << std::endl;
 
     auto r2 = client2.request("GET", "./index.html");
     handover_delay_end_time = client2.handover_delay_end_time;
+    // std::cout << "handover_delay_end_time : " << handover_delay_end_time << std::endl;
     std::cout << r2->status_code << std::endl;
 
     auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
@@ -122,6 +123,7 @@ void NetworkChange(std::string fromIface, std::string toIface)
 
     std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
     std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+    WatcherControll = 1;
 }
 
 // [SD] check addresses in network interfaces
@@ -165,10 +167,31 @@ void Watcher(int *thread_kill)
                 {
                     if (first_try == 1)
                     {
+                        std::cout << "[quic_toy_client] Detected network change and Start connection migration from " << before_iface << " to " << new_iface << std::endl;
+
+                        // Handover delay 측정 시작
                         auto millisec_since_epoch1 = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-                        handover_delay_start_time = millisec_since_epoch1; // 2번 째 CLOSE에서 시간 측정
+                        handover_delay_start_time = millisec_since_epoch1;
+                        // std::cout << "handover_delay_start_time : " << millisec_since_epoch1 << std::endl;
+
                         // connection migration 시작
-                        // client->StartAddressChange(QuicIpAddress(IfaceToAddress(std::string(before_iface))), QuicIpAddress(IfaceToAddress(std::string(new_iface))));
+                        // HttpsClient client2("quic.server-2:8000", false);
+
+                        // auto r2 = client2.request("GET", "./index.html");
+                        // handover_delay_end_time = client2.handover_delay_end_time;
+                        // std::cout << "handover_delay_end_time : " << handover_delay_end_time << std::endl;
+                        // std::cout << r2->status_code << std::endl;
+
+                        // auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                        // total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
+
+                        // client2.close();
+                        // WatcherControll = 1;
+
+                        // std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
+                        // std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+
+                        // client->StartAddressChange(QuicIpAddress(IfaceToAddress(std::string(before_iface))), QuicIpAddress(IfaceToAddress(std::string(before_iface))));
                     }
                     // std::cout << before_iface << " vs " << new_iface << std::endl;
                     strcpy(before_iface, new_iface);
@@ -204,6 +227,7 @@ void Watcher(int *thread_kill)
 int main()
 {
 
+    std::cout << "Fisrt connection start" << std::endl;
     HttpsClient client("quic.server-2:8000", false);
     thread _t1(NetworkChange, "eth0", "wlo1");
     thread _t2(Watcher, &WatcherControll);
