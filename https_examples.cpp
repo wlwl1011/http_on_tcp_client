@@ -46,10 +46,77 @@ size_t handover_delay_start_time;
 void default_resource_send(const HttpsServer &server, const shared_ptr<HttpsServer::Response> &response,
                            const shared_ptr<ifstream> &ifs);
 
-void NetworkChange(std::string fromIface, std::string toIface)
+void NetworkChange_only(std::string fromIface, std::string toIface)
 {
     std::cout << "Sleeping..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    std::cout << "NetworkChange Start" << std::endl;
+
+    std::string del_order = "sudo route del -net 0.0.0.0 dev ";
+    std::string add_order = "sudo route add -net 0.0.0.0 gw ";
+
+    FILE *fp;
+    char buf[256];
+    static char iface[256];
+    in_addr_t dest, gw, flag, refcnt, use, metric, mask;
+    struct in_addr from_gw, to_gw;
+    unsigned int to_metric;
+    int ret;
+
+    for (int i = 0; i < 1; i++)
+    {
+
+        fp = fopen("/proc/net/route", "r");
+        if (fp == NULL)
+            return;
+        while (fgets(buf, 255, fp))
+        {
+            if (!strncmp(buf, "Iface", 5))
+                continue;
+            ret = sscanf(buf, "%s\t%x\t%x\t%d\t%d\t%d\t%d\t%x", iface, &dest, &gw, &flag, &refcnt, &use, &metric, &mask);
+            if (ret < 8)
+            {
+                fprintf(stderr, "Line Read Error");
+                return;
+            }
+            if (dest == 0)
+            {
+                if (strcmp(fromIface.c_str(), iface) == 0)
+                {
+                    from_gw.s_addr = gw;
+                }
+                else if (strcmp(toIface.c_str(), iface) == 0)
+                {
+                    to_gw.s_addr = gw;
+                    to_metric = metric;
+                }
+            }
+        }
+
+        fclose(fp);
+        // change network info
+        system(std::string(del_order + fromIface).c_str());
+        std::cout << "[quic_toy_client] Network Change from " << fromIface << " to " << toIface << std::endl;
+        cout << std::string(add_order + inet_ntoa(to_gw) + " dev " + toIface + " metric 51").c_str() << endl;
+        system(std::string(add_order + inet_ntoa(to_gw) + " dev " + toIface + " metric 51").c_str());
+        auto millisec_since_epoch_hanover_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        handover_delay_start_time = millisec_since_epoch_hanover_start;
+        cout << std::string(del_order + toIface + " metric " + std::to_string(to_metric)).c_str() << endl;
+        system(std::string(del_order + toIface + " metric " + std::to_string(to_metric)).c_str());
+        cout << std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str() << endl;
+        system(std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str());
+    }
+    auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    total_delay_end_time = millisec_since_epoch;
+
+    std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+    WatcherControll = 1;
+}
+
+void NetworkChange_and_NewConnection(std::string fromIface, std::string toIface)
+{
+    std::cout << "Sleeping..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
     std::cout << "NetworkChange Start" << std::endl;
 
     std::string del_order = "sudo route del -net 0.0.0.0 dev ";
@@ -109,7 +176,7 @@ void NetworkChange(std::string fromIface, std::string toIface)
     // connection migration 시작
     std::cout << "Second connection start" << std::endl;
     HttpsClient client2("quic.server-2:8000", false);
-
+    // client->close();
     auto r2 = client2.request("GET", "./index.html");
     handover_delay_end_time = client2.handover_delay_end_time;
     // std::cout << "handover_delay_end_time : " << handover_delay_end_time << std::endl;
@@ -224,22 +291,57 @@ void Watcher(int *thread_kill)
 //   return ip;
 // }
 
-int main()
+int main(int argc, char *argv[])
 {
+    if (strcmp(argv[1], "0") == 0)
+    {
+        std::cout << "Connection start" << std::endl;
+        HttpsClient client("quic.server-2:8000", false);
+        // thread _t1(NetworkChange, "eth0", "wlo1", &client);
+        // thread _t2(Watcher, &WatcherControll);
 
-    std::cout << "Fisrt connection start" << std::endl;
-    HttpsClient client("quic.server-2:8000", false);
-    thread _t1(NetworkChange, "eth0", "wlo1");
-    thread _t2(Watcher, &WatcherControll);
+        auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        total_delay_start_time = millisec_since_epoch;
 
-    auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    total_delay_start_time = millisec_since_epoch; //
+        auto r1 = client.request("GET", "./index.html");
+        // std::cout << r1->status_code << std::endl;
+        // client.close();
 
-    auto r1 = client.request("GET", "./index.html");
-    std::cout << "1번 끝" << std::endl;
+        //_t1.join();
+        //_t2.join();
+    }
+    else if (strcmp(argv[1], "1") == 0)
+    {
+        std::cout << "Connection start" << std::endl;
+        HttpsClient client("quic.server-2:8000", false);
+        thread _t1(NetworkChange_only, "eth0", "wlo1");
+        thread _t2(Watcher, &WatcherControll);
 
-    _t1.join();
-    _t2.join();
+        auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        total_delay_start_time = millisec_since_epoch;
+
+        auto r1 = client.request("GET", "./index.html");
+
+        _t1.join();
+        _t2.join();
+    }
+    else if (strcmp(argv[1], "2") == 0)
+    {
+
+        std::cout << "Fisrt connection start" << std::endl;
+        HttpsClient client("quic.server-2:8000", false);
+        thread _t1(NetworkChange_and_NewConnection, "eth0", "wlo1");
+        thread _t2(Watcher, &WatcherControll);
+
+        auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        total_delay_start_time = millisec_since_epoch; //
+
+        auto r1 = client.request("GET", "./index.html");
+        // client.close();
+
+        _t1.join();
+        _t2.join();
+    }
 
     return 0;
 }
