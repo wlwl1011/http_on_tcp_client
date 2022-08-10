@@ -46,7 +46,7 @@ size_t handover_delay_start_time;
 void default_resource_send(const HttpsServer &server, const shared_ptr<HttpsServer::Response> &response,
                            const shared_ptr<ifstream> &ifs);
 
-void NetworkChange_only(std::string fromIface, std::string toIface)
+void NetworkChange(std::string fromIface, std::string toIface)
 {
     std::cout << "Sleeping..." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -106,96 +106,12 @@ void NetworkChange_only(std::string fromIface, std::string toIface)
         cout << std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str() << endl;
         system(std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str());
     }
-    auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    total_delay_end_time = millisec_since_epoch;
-
-    std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
-    WatcherControll = 1;
-}
-
-void NetworkChange_and_NewConnection(std::string fromIface, std::string toIface)
-{
-    std::cout << "Sleeping..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    std::cout << "NetworkChange Start" << std::endl;
-
-    std::string del_order = "sudo route del -net 0.0.0.0 dev ";
-    std::string add_order = "sudo route add -net 0.0.0.0 gw ";
-
-    FILE *fp;
-    char buf[256];
-    static char iface[256];
-    in_addr_t dest, gw, flag, refcnt, use, metric, mask;
-    struct in_addr from_gw, to_gw;
-    unsigned int to_metric;
-    int ret;
-
-    for (int i = 0; i < 1; i++)
-    {
-
-        fp = fopen("/proc/net/route", "r");
-        if (fp == NULL)
-            return;
-        while (fgets(buf, 255, fp))
-        {
-            if (!strncmp(buf, "Iface", 5))
-                continue;
-            ret = sscanf(buf, "%s\t%x\t%x\t%d\t%d\t%d\t%d\t%x", iface, &dest, &gw, &flag, &refcnt, &use, &metric, &mask);
-            if (ret < 8)
-            {
-                fprintf(stderr, "Line Read Error");
-                return;
-            }
-            if (dest == 0)
-            {
-                if (strcmp(fromIface.c_str(), iface) == 0)
-                {
-                    from_gw.s_addr = gw;
-                }
-                else if (strcmp(toIface.c_str(), iface) == 0)
-                {
-                    to_gw.s_addr = gw;
-                    to_metric = metric;
-                }
-            }
-        }
-
-        fclose(fp);
-        // change network info
-        system(std::string(del_order + fromIface).c_str());
-        std::cout << "[quic_toy_client] Network Change from " << fromIface << " to " << toIface << std::endl;
-        cout << std::string(add_order + inet_ntoa(to_gw) + " dev " + toIface + " metric 51").c_str() << endl;
-        system(std::string(add_order + inet_ntoa(to_gw) + " dev " + toIface + " metric 51").c_str());
-        auto millisec_since_epoch_hanover_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-        handover_delay_start_time = millisec_since_epoch_hanover_start;
-        cout << std::string(del_order + toIface + " metric " + std::to_string(to_metric)).c_str() << endl;
-        system(std::string(del_order + toIface + " metric " + std::to_string(to_metric)).c_str());
-        cout << std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str() << endl;
-        system(std::string(add_order + inet_ntoa(from_gw) + " dev " + fromIface + " metric 600").c_str());
-    }
-    // connection migration 시작
-    std::cout << "Second connection start" << std::endl;
-    HttpsClient client2("quic.server-2:8000", false);
-    // client->close();
-    auto r2 = client2.request("GET", "./index.html");
-    handover_delay_end_time = client2.handover_delay_end_time;
-    // std::cout << "handover_delay_end_time : " << handover_delay_end_time << std::endl;
-    std::cout << r2->status_code << std::endl;
-
-    auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
-
-    client2.close();
-    WatcherControll = 1;
-
-    std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
-    std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
-    WatcherControll = 1;
 }
 
 // [SD] check addresses in network interfaces
-void Watcher(int *thread_kill)
+void Watcher(int *thread_kill, char *flag)
 {
+
     char new_iface[64], before_iface[64];
     in_addr_t dest, gway, mask;
     int flags, refcnt, use, metric, mtu, win, irtt;
@@ -204,6 +120,7 @@ void Watcher(int *thread_kill)
 
     while (*thread_kill == 0)
     {
+        // std::cout << "." << std::endl;
         if ((fp = fopen("/proc/net/route", "r")) == NULL)
         {
             perror("file open error");
@@ -232,6 +149,7 @@ void Watcher(int *thread_kill)
 
                 if (strcmp(before_iface, new_iface) != 0)
                 {
+                    // std::cout << first_try << std::endl;
                     if (first_try == 1)
                     {
                         std::cout << "[quic_toy_client] Detected network change and Start connection migration from " << before_iface << " to " << new_iface << std::endl;
@@ -240,23 +158,37 @@ void Watcher(int *thread_kill)
                         auto millisec_since_epoch1 = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
                         handover_delay_start_time = millisec_since_epoch1;
                         // std::cout << "handover_delay_start_time : " << millisec_since_epoch1 << std::endl;
+                        if (strcmp(flag, "1") == 0)
+                        {
+                            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                            total_delay_end_time = millisec_since_epoch;
 
-                        // connection migration 시작
-                        // HttpsClient client2("quic.server-2:8000", false);
+                            std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+                            WatcherControll = 1;
+                        }
+                        else if (strcmp(flag, "2") == 0)
+                        {
 
-                        // auto r2 = client2.request("GET", "./index.html");
-                        // handover_delay_end_time = client2.handover_delay_end_time;
-                        // std::cout << "handover_delay_end_time : " << handover_delay_end_time << std::endl;
-                        // std::cout << r2->status_code << std::endl;
+                            std::cout << "[quic_toy_client] Detected network change and Start connection migration from " << before_iface << " to " << new_iface << std::endl;
+                            // connection migration 시작
+                            std::cout << "Second connection start" << std::endl;
+                            HttpsClient client2("quic.server-2:8000", false);
 
-                        // auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-                        // total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
+                            auto r2 = client2.request("GET", "./index.html");
+                            handover_delay_end_time = client2.handover_delay_end_time;
 
-                        // client2.close();
-                        // WatcherControll = 1;
+                            std::cout << r2->status_code << std::endl;
 
-                        // std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
-                        // std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+                            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                            total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
+
+                            client2.close();
+
+                            std::cout << "handover delay : " << (double)(handover_delay_end_time - handover_delay_start_time) << " miliseconds" << std::endl;
+                            std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+
+                            WatcherControll = 1;
+                        }
 
                         // client->StartAddressChange(QuicIpAddress(IfaceToAddress(std::string(before_iface))), QuicIpAddress(IfaceToAddress(std::string(before_iface))));
                     }
@@ -271,25 +203,6 @@ void Watcher(int *thread_kill)
     }
     std::cout << "[quic_toy_client] watcher terminates.." << std::endl;
 }
-
-// void IfaceToAddress(std::string iface) {
-//   struct ifaddrs *ifap, *ifa;
-//   struct sockaddr_in *sa;
-//   QuicIpAddress ip = QuicIpAddress::Any4();
-
-//   getifaddrs(&ifap);
-//   for(ifa = ifap; ifa; ifa = ifa->ifa_next) {
-//     if(ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET) {
-//       if(strcmp(ifa->ifa_name, iface.c_str()) == 0) {
-//         sa = (struct sockaddr_in *) ifa->ifa_addr;
-//         ip = QuicIpAddress(sa->sin_addr);
-//         break;
-//       }
-//     }
-//   }
-//   freeifaddrs(ifap);
-//   return ip;
-// }
 
 int main(int argc, char *argv[])
 {
@@ -314,8 +227,8 @@ int main(int argc, char *argv[])
     {
         std::cout << "Connection start" << std::endl;
         HttpsClient client("quic.server-2:8000", false);
-        thread _t1(NetworkChange_only, "eth0", "wlo1");
-        thread _t2(Watcher, &WatcherControll);
+        thread _t1(NetworkChange, "eth0", "wlo1");
+        thread _t2(Watcher, &WatcherControll, argv[1]);
 
         auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
         total_delay_start_time = millisec_since_epoch;
@@ -330,8 +243,8 @@ int main(int argc, char *argv[])
 
         std::cout << "Fisrt connection start" << std::endl;
         HttpsClient client("quic.server-2:8000", false);
-        thread _t1(NetworkChange_and_NewConnection, "eth0", "wlo1");
-        thread _t2(Watcher, &WatcherControll);
+        thread _t1(NetworkChange, "eth0", "wlo1");
+        thread _t2(Watcher, &WatcherControll, argv[1]);
 
         auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
         total_delay_start_time = millisec_since_epoch; //
@@ -341,6 +254,7 @@ int main(int argc, char *argv[])
 
         _t1.join();
         _t2.join();
+        std::cout << "main 함수 종료" << std::endl;
     }
 
     return 0;

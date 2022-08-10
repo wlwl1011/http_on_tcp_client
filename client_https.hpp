@@ -42,13 +42,13 @@ namespace SimpleWeb
                 context.set_verify_mode(boost::asio::ssl::verify_none);
         }
         std::size_t total_delay_start_time;
-        std::size_t handover_delay_end_time;
 
     protected:
         boost::asio::ssl::context context;
 
         void connect()
         {
+            std::cout << "connect" << std::endl;
             if (!socket || !socket->lowest_layer().is_open())
             {
                 std::unique_ptr<boost::asio::ip::tcp::resolver::query> query;
@@ -83,7 +83,6 @@ namespace SimpleWeb
                                 std::cout <<  this->socket->lowest_layer().remote_endpoint() << std::endl;
                                 auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
                                 total_delay_start_time = millisec_since_epoch;
-                                handover_delay_end_time = millisec_since_epoch;
                             }
                             else {
                                 std::lock_guard<std::mutex> lock(socket_mutex);
@@ -102,6 +101,7 @@ namespace SimpleWeb
 
                 if (!config.proxy_server.empty())
                 {
+                    std::cout << "깔깔" << std::endl;
                     boost::asio::streambuf write_buffer;
                     std::ostream write_stream(&write_buffer);
                     auto host_port = host + ':' + std::to_string(port);
@@ -125,6 +125,7 @@ namespace SimpleWeb
 
                     std::shared_ptr<Response> response(new Response());
                     timer = get_timeout_timer();
+                    std::cout << "??" << std::endl;
                     boost::asio::async_read_until(socket->next_layer(), response->content_buffer, "\r\n\r\n",
                                                   [this, timer](const boost::system::error_code &ec, size_t /*bytes_transferred*/)
                                                   {

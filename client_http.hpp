@@ -11,6 +11,12 @@
 #include <random>
 #include <mutex>
 #include <type_traits>
+using std::cout;
+using std::endl;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+using std::chrono::seconds;
+using std::chrono::system_clock;
 
 #ifndef CASE_INSENSITIVE_EQUALS_AND_HASH
 #define CASE_INSENSITIVE_EQUALS_AND_HASH
@@ -46,6 +52,7 @@ namespace SimpleWeb
     {
     public:
         virtual ~ClientBase() {}
+        std::size_t handover_delay_end_time;
 
         class Response
         {
@@ -87,6 +94,7 @@ namespace SimpleWeb
         std::shared_ptr<Response> request(const std::string &request_type, const std::string &path = "/", boost::string_ref content = "",
                                           const std::map<std::string, std::string> &header = std::map<std::string, std::string>())
         {
+            std::cout << "request" << std::endl;
             auto corrected_path = path;
             if (corrected_path == "")
                 corrected_path = "/";
@@ -294,6 +302,9 @@ namespace SimpleWeb
             boost::asio::streambuf chunked_streambuf;
 
             auto timer = get_timeout_timer();
+            std::cout << "recieving start" << std::endl;
+            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+            handover_delay_end_time = millisec_since_epoch;
             boost::asio::async_read_until(*socket, response->content_buffer, "\r\n\r\n",
                                           [this, &response, &chunked_streambuf, timer](const boost::system::error_code &ec, size_t bytes_transferred)
                                           {
@@ -301,6 +312,8 @@ namespace SimpleWeb
                                                   timer->cancel();
                                               if (!ec)
                                               {
+
+                                                  std::cout << "recieving data to server " << std::endl;
                                                   size_t num_additional_bytes = response->content_buffer.size() - bytes_transferred;
 
                                                   parse_response_header(response);
@@ -308,14 +321,17 @@ namespace SimpleWeb
                                                   auto header_it = response->header.find("Content-Length");
                                                   if (header_it != response->header.end())
                                                   {
+
                                                       auto content_length = stoull(header_it->second);
                                                       if (content_length > num_additional_bytes)
                                                       {
                                                           auto timer = get_timeout_timer();
+
                                                           boost::asio::async_read(*socket, response->content_buffer,
                                                                                   boost::asio::transfer_exactly(content_length - num_additional_bytes),
                                                                                   [this, timer](const boost::system::error_code &ec, size_t /*bytes_transferred*/)
                                                                                   {
+                                                                                      std::cout << "recieving done" << std::endl;
                                                                                       if (timer)
                                                                                           timer->cancel();
                                                                                       if (ec)
@@ -329,10 +345,12 @@ namespace SimpleWeb
                                                   }
                                                   else if ((header_it = response->header.find("Transfer-Encoding")) != response->header.end() && header_it->second == "chunked")
                                                   {
+                                                      // std::cout << "2" << std::endl;
                                                       request_read_chunked(response, chunked_streambuf);
                                                   }
                                                   else if (response->http_version < "1.1" || ((header_it = response->header.find("Connection")) != response->header.end() && header_it->second == "close"))
                                                   {
+                                                      // std::cout << "3" << std::endl;
                                                       auto timer = get_timeout_timer();
                                                       boost::asio::async_read(*socket, response->content_buffer,
                                                                               [this, timer](const boost::system::error_code &ec, size_t /*bytes_transferred*/)
@@ -351,6 +369,7 @@ namespace SimpleWeb
                                               }
                                               else
                                               {
+                                                  // std::cout << "4" << std::endl;
                                                   std::lock_guard<std::mutex> lock(socket_mutex);
                                                   socket = nullptr;
                                                   throw boost::system::system_error(ec);
@@ -364,6 +383,7 @@ namespace SimpleWeb
 
         void request_read_chunked(const std::shared_ptr<Response> &response, boost::asio::streambuf &streambuf)
         {
+            std::cout << "chunc" << std::endl;
             auto timer = get_timeout_timer();
             boost::asio::async_read_until(*socket, response->content_buffer, "\r\n",
                                           [this, &response, &streambuf, timer](const boost::system::error_code &ec, size_t bytes_transferred)
