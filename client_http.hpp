@@ -150,6 +150,8 @@ namespace SimpleWeb
             io_service.reset();
             io_service.run();
 
+            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+            std::cout << millisec_since_epoch << std::endl;
             return request_read();
         }
 
@@ -302,9 +304,10 @@ namespace SimpleWeb
             boost::asio::streambuf chunked_streambuf;
 
             auto timer = get_timeout_timer();
-            std::cout << "recieving start" << std::endl;
+            std::cout << "receiving start" << std::endl;
+
             auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-            handover_delay_end_time = millisec_since_epoch;
+            std::cout << millisec_since_epoch << std::endl;
             boost::asio::async_read_until(*socket, response->content_buffer, "\r\n\r\n",
                                           [this, &response, &chunked_streambuf, timer](const boost::system::error_code &ec, size_t bytes_transferred)
                                           {
@@ -312,10 +315,12 @@ namespace SimpleWeb
                                                   timer->cancel();
                                               if (!ec)
                                               {
-
-                                                  std::cout << "recieving data to server " << std::endl;
+                                                  std::cout << "receiving data to server " << std::endl;
+                                                  auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                                                  std::cout << millisec_since_epoch << std::endl;
                                                   size_t num_additional_bytes = response->content_buffer.size() - bytes_transferred;
-
+                                                  //   auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                                                  //   handover_delay_end_time = millisec_since_epoch;
                                                   parse_response_header(response);
 
                                                   auto header_it = response->header.find("Content-Length");
@@ -332,6 +337,8 @@ namespace SimpleWeb
                                                                                   [this, timer](const boost::system::error_code &ec, size_t /*bytes_transferred*/)
                                                                                   {
                                                                                       std::cout << "recieving done" << std::endl;
+                                                                                      auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                                                                                      std::cout << millisec_since_epoch << std::endl;
                                                                                       if (timer)
                                                                                           timer->cancel();
                                                                                       if (ec)

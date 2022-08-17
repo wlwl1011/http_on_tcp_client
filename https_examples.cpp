@@ -160,16 +160,24 @@ void Watcher(int *thread_kill, char *flag)
                         // std::cout << "handover_delay_start_time : " << millisec_since_epoch1 << std::endl;
                         if (strcmp(flag, "1") == 0)
                         {
-                            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-                            total_delay_end_time = millisec_since_epoch;
+                            std::cout << "Second connection start" << std::endl;
+                            HttpsClient client2("quic.server-2:8000", false);
 
-                            std::cout << "total delay : " << (double)(total_delay_end_time - total_delay_start_time) << " miliseconds" << std::endl;
+                            auto r2 = client2.request("GET", "./index.html");
+                            handover_delay_end_time = client2.handover_delay_end_time;
+
+                            std::cout << r2->status_code << std::endl;
+
+                            auto millisec_since_epoch = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+                            total_delay_end_time = millisec_since_epoch; // 2번 째 CLOSE에서 시간 측정
+
+                            client2.close();
+
                             WatcherControll = 1;
                         }
                         else if (strcmp(flag, "2") == 0)
                         {
 
-                            std::cout << "[quic_toy_client] Detected network change and Start connection migration from " << before_iface << " to " << new_iface << std::endl;
                             // connection migration 시작
                             std::cout << "Second connection start" << std::endl;
                             HttpsClient client2("quic.server-2:8000", false);
@@ -217,6 +225,7 @@ int main(int argc, char *argv[])
         total_delay_start_time = millisec_since_epoch;
 
         auto r1 = client.request("GET", "./index.html");
+        std::cout << r1->status_code << std::endl;
         // std::cout << r1->status_code << std::endl;
         // client.close();
 
